@@ -20,7 +20,7 @@ function hasDuplicates(arr) {
  
 var EditableTable = Model.extend(
 {
-    constructor : function(args) {
+    constructor : function(el, args) {
 	var i;
 	if (typeof args !== 'object') throw new Error('EditableTable constructor expects object args.');
 	if (typeof args.fields !== 'object') throw new Error('EditableTable constructor expects args.fields to be field -> type array.');
@@ -42,10 +42,18 @@ var EditableTable = Model.extend(
 	this.field_order = args.field_order;
 	this.editable = args.editable;
 	this.entries = {};
+	this.ordered_entries = [];
+	this.$el = $(el);
 	if (typeof args.entries === 'object') this.update(args.entries);
     },
     update : function(data) {
-	
+	var self = this;
+	_.each(data, function(k, v) {
+	    if (!_.has(self.entries, k)) self.entries[k] = new EditableEntry({ fields : self.fields,
+									       field_order : self.field_order,
+									       editable : self.editable });
+	    self.entries[k].update(v);
+	});
     },
     getSelected : function() {
 	var od = {};
@@ -56,6 +64,9 @@ var EditableTable = Model.extend(
     },
     sort : function(comparitor, order) {
 	
+    },
+    render : function() {
+	this.$el.html(this.template({field_order : this.field_order}));
     }
 },
 {
@@ -70,7 +81,6 @@ var EditableEntry = Model.extend(
 	this.field_order = args.field_order;
 	this.editable = args.editable;
 	this.$el = $(this.template());
-	this.update(args.values);
     },
     update : function(obj) {
 	var self = this;
@@ -103,6 +113,9 @@ var EditableEntry = Model.extend(
 	});
 	return tr;
     },
+    render : function() {
+	return this.template();
+    },
     getField : function(f) {
 	var fel = this.$el.find('[data-field="'+f+'"]');
 	if (f[0].tagName.toLowerCase() === 'input') return f.val();
@@ -124,7 +137,4 @@ var EditableEntry = Model.extend(
 	});
 	return od;
     }
-},
-{
-    template : _.template($('#editable-entry-template').html())
 });

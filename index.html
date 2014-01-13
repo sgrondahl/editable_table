@@ -9,5 +9,17 @@
   </head>
   <body>
     <div id="status-holder"></div>
+    <script id="editable-table-template"  type="text/template">
+      <table>
+	<thead>
+	  <th></th>
+	  <% _.each(field_order, function(f) { %>
+	    <th><%= f %></th>
+	  <% }); %>
+	</thead>
+	<tbody>
+	</tbody>
+      </table>
+    </script>
   </body>
 </html>
