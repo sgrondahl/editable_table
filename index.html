@@ -29,7 +29,9 @@
       function t() {
       var et = new EditableTable($('#status-holder'), { fields : { a : 'string', b : 'datetime', c : 'time' }, field_order : ['c', 'a', 'b' ], editable : ['a', 'b', 'c' ] });
       et.render();
-      et.update({ abc123 : { a : 'this is a thing' }}); };
+      et.update({ 
+      abc123 : { a : 'this is a thing' },
+      cde456 : { a : 'this is the second thing', c : '14:40' } }); };
     </script>
   </head>
   <body>

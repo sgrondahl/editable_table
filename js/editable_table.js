@@ -39,8 +39,13 @@ var EditableTable = Model.extend(
 	this.editable = args.editable;
 	this.entries = {};
 	this.ordered_entries = [];
-	this.onupdate = typeof args.onupdate === 'function' ? args.onupdate : function(d) { console.log(d); };
+	this.onupdate = typeof args.onupdate === 'function' ? args.onupdate : function(k, v) { console.log(k + ' : ' + v); };
 	this.$el = $(el);
+	var template = $('#editable-table-template').html();
+	this.$el.html(_.template(template, {field_order : this.field_order}));
+	this.$tbody = this.$el.find('tbody:first');
+	this.bindSelectAll();
+	this.bindColumnSorts();
 	if (typeof args.entries === 'object') this.update(args.entries);
     },
     update : function(data) {
@@ -50,11 +55,12 @@ var EditableTable = Model.extend(
 		self.entries[k] = new EditableEntry({ fields : self.fields,
 						      field_order : self.field_order,
 						      editable : self.editable,
-						      onupdate : self.onupdate});
-		self.$tbody.append(self.entries[k].render());
+						      onupdate : function(_v) { self.onupdate(k, _v); } });
+		self.ordered_entries.push(self.entries[k]);
 	    }
 	    self.entries[k].update(v);
 	});
+	this.render();
     },
     getSelected : function() {
 	var od = {};
@@ -64,8 +70,101 @@ var EditableTable = Model.extend(
 	});
 	return od;
     },
-    sort : function(comparitor, order) {
+    sort : function(comparitor, reverse) {
+	function sortBy(kg) {
+	    return function qsort(arr) {
+		if (arr.length < 2) {
+		    return arr;
+		} else if (arr.length == 2) {
+		    if (kg(arr[0]) < kg(arr[1])) return arr;
+		    else return [arr[1], arr[0]];
+		} else {
+		    var pkey = kg(arr[Math.floor(arr.length/2)]);
+		    var h = [], l = [], e = [];
+		    for (var i = 0; i < arr.length; i++) {
+			if (kg(arr[i]) < pkey) l.push(arr[i]);
+			else if (kg(arr[i]) == pkey) e.push(arr[i]);
+			else h.push(arr[i]);
+		    }
+		    return qsort(l).concat(e, qsort(h));
+		}
+	    };
+	}
 	
+	if (typeof comparitor !== 'function') throw new Error('sort requires first argument to be sort key generator');
+	reverse = typeof reverse === 'boolean' ? reverse : false;
+
+	/* Sort the entries by the comparitor and render. */
+	this.ordered_entries = (sortBy(comparitor))(this.ordered_entries);
+	if (reverse) this.ordered_entries.reverse();
+	this.render();
+    },
+    bindColumnSorts : function() {
+	var self = this;
+
+	function datesort(col) {
+	    var date_regex = /(\d{1,2})\/(\d{2})\/(\d{4})/;
+	    return function(ee) {
+		var m = ee.serialize()[col].match(date_regex),
+		    date = new Date(0);
+		if (m) date = new Date(parseInt(m[3])-1, parseInt(m[1]), parseInt(m[2]));
+		return date;
+	    };
+	}
+
+	function timesort(col) {
+	    var time_regex = /(\d{1,2}):(\d{2})/;
+	    return function(ee) {
+		var m = ee.serialize()[col].match(time_regex),
+		    time = new Date(0);
+		if (m) time = new Date(0, 0, 0, parseInt(m[1]), parseInt(m[2]));
+		return time;
+	    };
+	}
+
+	function datetimesort(col) {
+	    function addSeconds(d, s) { return new Date(d.getTime() + s * 1000); }
+	    function addMinutes(d, m) { return new Date(d.getTime() + m * 60 * 1000); }
+	    function addHours(d, h) { return new Date(d.getTime() + h * 60 * 60 * 1000); }
+	    var dt_regex = /(\d{1,2})\/(\d{2})\/(\d{4}) (\d{1,2}):(\d{2})(am|pm) (\+|-)(\d{2})(\d{2})/;
+	    return function(ee) {
+		var m = ee.serialize()[col].match(dt_regex),
+		    dt = new Date(0);
+		if (m) {
+		    dt = new Date(parseInt(m[3])-1, parseInt(m[1]), parseInt(m[2]), parseInt(m[4]), parseInt(m[5]));
+		    if (m[6] === 'pm') dt = addHours(dt, 12);
+
+		    if (m[7] === '+')  {
+			dt = addHours(dt,  parseInt(m[8]));
+			dt = addMinutes(dt, parseInt(m[9]));
+		    } else {
+			dt = addHours(dt,  -1 * parseInt(m[8]));
+			dt = addMinutes(dt,  -1 * parseInt(m[9]));
+		    }
+		}
+		return dt;
+	    };
+	}
+
+	this.$el.find('th').click(function() {
+	    var col = $(this).html(),
+		sorter = function(ee) {
+		    return ee.serialize()[col];
+		};
+	    if (!col || !_.has(self.fields, col)) return;
+
+	    /* Choose appropriate sorter (or fall back to default). */
+	    if (self.fields[col] === 'date') sorter = datesort(col);
+	    else if (self.fields[col] === 'time') sorter = timesort(col);
+	    else if (self.fields[col] === 'datetime') sorter = datetimesort(col);
+
+	    /* Check whether this field is already sorted... */
+	    var sort_dir = $(this).attr('data-sort') === "true"; // 1 indicates forward sort done.
+	    self.$el.find('th').removeAttr('data-sort'); // Remove sort dir on other columns.
+	    $(this).attr('data-sort', !sort_dir); // Update record to note current sort.
+
+	    self.sort(sorter, sort_dir);
+	});
     },
     bindSelectAll : function() {
 	var self = this;
@@ -78,10 +177,11 @@ var EditableTable = Model.extend(
 	});
     },
     render : function() {
-	var template = $('#editable-table-template').html();
-	this.$el.html(_.template(template, {field_order : this.field_order}));
-	this.$tbody = this.$el.find('tbody:first');
-	this.bindSelectAll();
+	var self = this;
+	_.each(this.ordered_entries, function(v) {
+	    self.$tbody.append(v.render());
+	});
+	
     }
 });
 
