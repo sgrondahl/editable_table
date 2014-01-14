@@ -13,6 +13,10 @@ function hasDuplicates(arr) {
     }
     return false;
 };
+
+jQuery.fn.EditableTable = function(args) {
+    return new EditableTable($(this[0]), args);
+};
  
 var EditableTable = Model.extend(
 {

@@ -27,7 +27,7 @@
     <script>
       $(t);
       function t() {
-      var et = new EditableTable($('#status-holder'), { fields : { a : 'string', b : 'datetime', c : 'time' }, field_order : ['c', 'a', 'b' ], editable : ['a', 'b', 'c' ] });
+      var et = $('#status-holder').EditableTable({ fields : { a : 'string', b : 'datetime', c : 'time' }, field_order : ['c', 'a', 'b' ], editable : ['a', 'b', 'c' ] });
       et.render();
       et.update({ 
       abc123 : { a : 'this is a thing' },
