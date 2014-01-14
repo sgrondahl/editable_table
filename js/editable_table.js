@@ -1,21 +1,17 @@
 /*global $ jQuery _ Model*/
 
 
-/* 
- Require the following to be implemented :
- * notifyUpdate : simply a path to send post of updates
-*/
 
 function hasDuplicates(arr) {
     var seen = [];
     for (var i = 0; i < arr.length; i++) {
-	if (seen.indexOf(i) < 0) {
-	    seen.push(i);
+	if (seen.indexOf(arr[i]) < 0) {
+	    seen.push(arr[i]);
 	} else {
-	    return false;
+	    return true;
 	}
     }
-    return true;
+    return false;
 };
  
 var EditableTable = Model.extend(
@@ -26,7 +22,7 @@ var EditableTable = Model.extend(
 	if (typeof args.fields !== 'object') throw new Error('EditableTable constructor expects args.fields to be field -> type array.');
 	if (!args.field_order instanceof Array) throw new Error('EditableTable expects args.field_order to be ordered array of fields.');
 	if (hasDuplicates(args.field_order)) throw new Error('args.field_order has duplicate entries');
-	if (args.field_order.length != args.fields.length) throw new Error('length mismatch between args.fields and args.field_order');
+	if (args.field_order.length != _.keys(args.fields).length) throw new Error('length mismatch between args.fields and args.field_order');
 	for (i = 0; i < args.field_order.length; i++) {
 	    if (!_.has(args.fields, args.field_order[i]))
 		throw new Error('args.fields and args.field_order must contain the same fields!');
@@ -43,21 +39,27 @@ var EditableTable = Model.extend(
 	this.editable = args.editable;
 	this.entries = {};
 	this.ordered_entries = [];
+	this.onupdate = typeof args.onupdate === 'function' ? args.onupdate : function(d) { console.log(d); };
 	this.$el = $(el);
 	if (typeof args.entries === 'object') this.update(args.entries);
     },
     update : function(data) {
 	var self = this;
-	_.each(data, function(k, v) {
-	    if (!_.has(self.entries, k)) self.entries[k] = new EditableEntry({ fields : self.fields,
-									       field_order : self.field_order,
-									       editable : self.editable });
+	_.each(data, function(v, k) {
+	    if (!_.has(self.entries, k)) {
+		self.entries[k] = new EditableEntry({ fields : self.fields,
+						      field_order : self.field_order,
+						      editable : self.editable,
+						      onupdate : self.onupdate});
+		self.$tbody.append(self.entries[k].render());
+	    }
 	    self.entries[k].update(v);
 	});
     },
     getSelected : function() {
 	var od = {};
-	_.each(this.entries, function(k,v) {
+	_.each(this.entries, function(v, k) {
+	    console.log(v);
 	    if (v.selected()) od[k] = v.serialize();
 	});
 	return od;
@@ -65,37 +67,52 @@ var EditableTable = Model.extend(
     sort : function(comparitor, order) {
 	
     },
+    bindSelectAll : function() {
+	var self = this;
+	this.$el.find('input[type="checkbox"][data-field="__selectall__"]:first').change(function() {
+	    var ic = $(this).is(':checked');
+	    _.each(self.entries, function(v, k) {
+		if (ic) v.select();
+		else v.deselect();
+	    });
+	});
+    },
     render : function() {
-	this.$el.html(this.template({field_order : this.field_order}));
+	var template = $('#editable-table-template').html();
+	this.$el.html(_.template(template, {field_order : this.field_order}));
+	this.$tbody = this.$el.find('tbody:first');
+	this.bindSelectAll();
     }
-},
-{
-    template : _.template($('#editable-table-template').html())
 });
 
 var EditableEntry = Model.extend(
 {
     constructor : function(args) {
-	this.selected = false;
 	this.fields = args.fields;
 	this.field_order = args.field_order;
 	this.editable = args.editable;
+	this.onupdate = args.onupdate;
 	this.$el = $(this.template());
+	this.$checkbox = this.$el.find('input[type="checkbox"][data-field="__selected__"]');
+	this.edits_timeout = undefined;
+	this.bindEdits();
     },
     update : function(obj) {
 	var self = this;
-	_.each(obj, function(k, v) {
+	_.each(obj, function(v, k) {
 	    self.setField(k, v);
 	});
     },
     template : function() {
 	var tr = $(document.createElement('tr')),
-	    self = this;
-	tr.append($(document.createElement('input')).attr('type', 'checkbox').attr('data-field', '__selected__'));
+	    self = this,
+	    itd = $(document.createElement('td'));
+	itd.append($(document.createElement('input')).attr('type', 'checkbox').attr('data-field', '__selected__'));
+	tr.append(itd);
 	_.each(this.field_order, function(f) {
 	    var td = $(document.createElement('td'));
 	    if (self.editable.indexOf(f) < 0) {
-		tr.append($(document.createElement('span')).attr('data-field', f));
+		td.append($(document.createElement('span')).attr('data-field', f));
 	    } else {
 		var tdi = $(document.createElement('input')).addClass('etr-input').attr('data-field', f);
 		if (self.fields[f] === 'datetime') {
@@ -107,27 +124,35 @@ var EditableEntry = Model.extend(
 		} else if (self.fields[f] === 'time') {
 		    tdi.timepicker();
 		}
-		tr.append(tdi);
+		td.append(tdi);
 	    }
 	    tr.append(td);
 	});
 	return tr;
     },
     render : function() {
-	return this.template();
+	return this.$el;
     },
     getField : function(f) {
 	var fel = this.$el.find('[data-field="'+f+'"]');
-	if (f[0].tagName.toLowerCase() === 'input') return f.val();
-	else return f.html();
+	if (!fel || fel.length === 0) return undefined;
+	if (fel[0].tagName.toLowerCase() === 'input') return fel.val();
+	else return fel.html();
     },
     setField : function(f, v) {
 	var fel = this.$el.find('[data-field="'+f+'"]');
-	if (f[0].tagName.toLowerCase() === 'input') fel.val(v);
+	if (!fel || fel.length === 0) return;
+	if (fel[0].tagName.toLowerCase() === 'input') fel.val(v);
 	else fel.html(v);
     },
     selected : function() {
-	return this.$el.find('input[type="checkbox"][data-field="__selected__"]').is(':checked');
+	return this.$checkbox.is(':checked');
+    },
+    select : function() {
+	this.$checkbox.prop('checked', true);
+    },
+    deselect : function() {
+	this.$checkbox.prop('checked', false);
     },
     serialize : function() {
 	var od = {},
@@ -136,5 +161,14 @@ var EditableEntry = Model.extend(
 	    od[f] = self.getField(f);
 	});
 	return od;
+    },
+    bindEdits : function() {
+	var self = this;
+	this.$el.find('input').change(function(){
+	    window.clearTimeout(self.edits_timeout);
+	    self.edits_timeout = window.setTimeout(function() {
+		self.onupdate(self.serialize());
+	    }, 1000);
+	});
     }
 });

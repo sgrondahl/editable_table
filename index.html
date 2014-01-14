@@ -6,13 +6,40 @@
     <script type="text/javascript" src="./js/mixins.js"></script>
     <script type="text/javascript" src="./js/editable_table.js"></script>
     <script type="text/javascript" src="./js/template_loader.js"></script>
+    <script type="text/javascript" src="./js/jquery-ui.min.js"></script>
+    <script type="text/javascript" src="./js/jquery-ui-timepicker-addon.min.js"></script>
+    <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css">
+    <link rel="stylesheet" href="./css/jquery-ui-timepicker-addon.min.css">
+    <style>
+      .ui-widget {
+      font-size : 10px;
+      }
+      input {
+      border : none;
+      }
+      thead {
+      background-color : #eee;
+      }
+      th {
+      cursor : pointer;
+      }
+    </style>
+    <script>
+      $(t);
+      function t() {
+      var et = new EditableTable($('#status-holder'), { fields : { a : 'string', b : 'datetime', c : 'time' }, field_order : ['c', 'a', 'b' ], editable : ['a', 'b', 'c' ] });
+      et.render();
+      et.update({ abc123 : { a : 'this is a thing' }}); };
+    </script>
   </head>
   <body>
     <div id="status-holder"></div>
     <script id="editable-table-template"  type="text/template">
       <table>
 	<thead>
-	  <th></th>
+	  <th>
+	    <input type="checkbox" data-field="__selectall__">
+	  </th>
 	  <% _.each(field_order, function(f) { %>
 	    <th><%= f %></th>
 	  <% }); %>
