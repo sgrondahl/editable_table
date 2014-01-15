@@ -1,0 +1,17 @@
+
+.ui-widget {
+    font-size : 0.8em;
+}
+
+input {
+    border : none;
+}
+
+thead {
+    background-color : #eee;
+}
+
+th {
+    cursor : pointer;
+}
+

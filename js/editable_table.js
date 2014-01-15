@@ -166,6 +166,7 @@ var EditableTable = Model.extend(
 	    var sort_dir = $(this).attr('data-sort') === "true"; // 1 indicates forward sort done.
 	    self.$el.find('th').removeAttr('data-sort'); // Remove sort dir on other columns.
 	    $(this).attr('data-sort', !sort_dir); // Update record to note current sort.
+	    $(this).addClass('sortAsc');
 
 	    self.sort(sorter, sort_dir);
 	});
@@ -186,6 +187,20 @@ var EditableTable = Model.extend(
 	    self.$tbody.append(v.render());
 	});
 	
+    },
+    filter : function(col, condition) {
+	var self = this;
+	_.each(self.entries, function(v, k) {
+	    if (!condition(v.serialize()[col])) v.hide();
+	    else v.show();
+	});
+	this.render();
+    },
+    unfilter : function() {
+	_.each(this.entries, function(v, k) {
+	    v.show();
+	});
+	this.render();
     }
 });
 
@@ -233,6 +248,12 @@ var EditableEntry = Model.extend(
 	    tr.append(td);
 	});
 	return tr;
+    },
+    hide : function() {
+	this.$el.hide();
+    },
+    show : function() {
+	this.$el.show();
     },
     render : function() {
 	return this.$el;
